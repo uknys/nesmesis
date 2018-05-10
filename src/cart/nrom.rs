@@ -14,19 +14,19 @@ pub struct NROM {
 impl NROM {
     pub fn new(d: &[u8]) -> NROM {
         let prg_num = d[4];
-        let prg_size = prg_num as u16 * PRG_ROM_PAGE_SIZE;
-        let chr_size = d[5] as u16 * CHR_ROM_PAGE_SIZE;
+        let prg_size = u16::from(prg_num) * PRG_ROM_PAGE_SIZE;
+        let chr_size = u16::from(d[5])   * CHR_ROM_PAGE_SIZE;
         let ram_size = if d[8] == 0 {
             PRG_RAM_PAGE_SIZE
         } else {
-            d[8] as u16 * PRG_RAM_PAGE_SIZE
+           u16::from(d[8]) * PRG_RAM_PAGE_SIZE
         };
 
         NROM {
             prg_rom: d[16..(16 + prg_size) as usize].to_vec(),
             chr_rom: d[(16 + prg_size) as usize..(16 + prg_size + chr_size) as usize].to_vec(),
             prg_ram: vec![0; ram_size as usize],
-            prg_num: prg_num,
+            prg_num,
         }
     }
 }

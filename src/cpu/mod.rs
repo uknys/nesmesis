@@ -1,9 +1,9 @@
 pub mod ops;
 pub mod reg;
 
+use MMU;
 use cpu::ops::{AddressingMode, Operation};
 use cpu::reg::{Flag, Register, Registers};
-use MMU;
 
 const NMI_VECTOR: u16 = 0xFFFA;
 const RESET_VECTOR: u16 = 0xFFFC;
@@ -19,13 +19,13 @@ impl<'a> CPU<'a> {
     pub fn new(bus: &'a mut MMU) -> CPU {
         CPU {
             reg: Registers::default(),
-            bus: bus,
+            bus,
             nmi: false,
         }
     }
 
     fn cross(a: u16, b: u8) -> bool {
-        ((a.wrapping_add(b as u16)) & 0xFF00) != (a & 0xFF00)
+        ((a.wrapping_add(u16::from(b))) & 0xFF00) != (a & 0xFF00)
     }
 
     // #region Execution
@@ -102,7 +102,7 @@ impl<'a> CPU<'a> {
     }
 
     fn read16(&mut self, a: u16) -> u16 {
-        self.read(a) as u16 | ((self.read(a + 1) as u16) << 8)
+        u16::from(self.read(a)) | (u16::from(self.read(a + 1)) << 8)
     }
 
     fn write16(&mut self, a: u16, v: u16) {
@@ -114,7 +114,7 @@ impl<'a> CPU<'a> {
     // #region Stack
     fn push(&mut self, v: u8) {
         let sp = self.reg.read(Register::SP);
-        self.write(sp as u16 + 0x100, v);
+        self.write(u16::from(sp) + 0x100, v);
         self.reg.write(Register::SP, sp.wrapping_sub(1));
     }
 
@@ -126,11 +126,11 @@ impl<'a> CPU<'a> {
     fn pop(&mut self) -> u8 {
         let sp = self.reg.read(Register::SP).wrapping_add(1);
         self.reg.write(Register::SP, sp);
-        self.read(sp as u16 + 0x100)
+        self.read(u16::from(sp) + 0x100)
     }
 
     fn pop16(&mut self) -> u16 {
-        self.pop() as u16 | ((self.pop() as u16) << 8)
+        u16::from(self.pop()) | (u16::from(self.pop()) << 8)
     }
     // #endregion
 
@@ -160,19 +160,19 @@ impl<'a> CPU<'a> {
             self.bus.cycle();
         }
 
-        a.wrapping_add(reg as u16)
+        a.wrapping_add(u16::from(reg))
     }
 
     fn zp(&mut self) -> u16 {
         let imm = self.imm();
-        self.read(imm) as u16
+        u16::from(self.read(imm))
     }
 
     fn zpi(&mut self, r: Register) -> u16 {
         let a = self.zp();
         self.bus.cycle();
         let reg = self.reg.read(r);
-        (a + reg as u16) & 0xFF
+        (a + u16::from(reg)) & 0xFF
     }
 
     fn izx(&mut self) -> u16 {
@@ -183,9 +183,9 @@ impl<'a> CPU<'a> {
         self.bus.cycle();
 
         if zero == 0xFF {
-            self.read(0xFF) as u16 | ((self.read(0x00) as u16) << 8)
+            u16::from(self.read(0xFF)) | (u16::from(self.read(0x00)) << 8)
         } else {
-            self.read16(zero as u16)
+            self.read16(u16::from(zero))
         }
     }
 
@@ -197,16 +197,16 @@ impl<'a> CPU<'a> {
         self.bus.cycle();
 
         let addr = if zero == 0xFF {
-            self.read(0xFF) as u16 | ((self.read(0x00) as u16) << 8)
+            u16::from(self.read(0xFF)) | (u16::from(self.read(0x00)) << 8)
         } else {
-            self.read16(zero as u16)
+            self.read16(u16::from(zero))
         };
 
-        if extra && CPU::cross(addr.wrapping_sub(y as u16), y) {
+        if extra && CPU::cross(addr.wrapping_sub(u16::from(y)), y) {
             self.bus.cycle();
         }
 
-        addr.wrapping_add(y as u16)
+        addr.wrapping_add(u16::from(y))
     }
 
     fn ind(&mut self) -> u16 {
@@ -214,7 +214,7 @@ impl<'a> CPU<'a> {
         let addr = self.read16(imm);
 
         if (addr & 0xFF) == 0xFF {
-            self.read(addr) as u16 | ((self.read(addr - 0xFF) as u16) << 8)
+            u16::from(self.read(addr)) | (u16::from(self.read(addr - 0xFF)) << 8)
         } else {
             self.read16(addr)
         }
@@ -261,12 +261,12 @@ impl<'a> CPU<'a> {
         let a = self.reg.read(Register::A);
         let b = self.read(addr);
         let c = if self.reg.check_flag(Flag::Carry) {
-            1
+            1u16
         } else {
-            0
+            0u16
         };
 
-        let result = a as u16 + b as u16 + c as u16;
+        let result = u16::from(a) + u16::from(b) + c;
 
         self.reg.update_cv(a, b, result);
         self.reg.write(Register::A, result as u8);
@@ -312,12 +312,12 @@ impl<'a> CPU<'a> {
         let a = self.reg.read(Register::A);
         let b = self.read(addr) ^ 0xFF;
         let c = if self.reg.check_flag(Flag::Carry) {
-            1
+            1u16
         } else {
-            0
+            0u16
         };
 
-        let result = a as u16 + b as u16 + c as u16;
+        let result = u16::from(a) + u16::from(b) + c;
 
         self.reg.update_cv(a, b, result);
         self.reg.write(Register::A, result as u8);
@@ -404,8 +404,10 @@ impl<'a> CPU<'a> {
 
         self.reg.update_flag(Flag::Carry, reg >= value);
         self.reg.update_flag(Flag::Zero, reg == value);
-        self.reg
-            .update_flag(Flag::Negative, (reg as i16 - value as i16) & 0x80 == 0x80);
+        self.reg.update_flag(
+            Flag::Negative,
+            (i16::from(reg) - i16::from(value)) & 0x80 == 0x80,
+        );
     }
 
     fn jump(&mut self, m: Option<AddressingMode>) {
@@ -484,7 +486,7 @@ impl<'a> CPU<'a> {
                 self.bus.cycle();
             }
 
-            let res = pc as i16 + value as i16;
+            let res = pc as i16 + i16::from(value);
             self.reg.write_pc(res as u16);
         }
     }
@@ -573,7 +575,7 @@ impl<'a> CPU<'a> {
         self.reg.update_flag(Flag::Carry, reg >= value);
         self.reg.update_flag(Flag::Zero, reg == value);
         self.reg
-            .update_flag(Flag::Negative, (reg as i16 - value as i16) & 0x80 == 0x80);
+            .update_flag(Flag::Negative, (i16::from(reg) - i16::from(value)) & 0x80 == 0x80);
 
         self.write(addr, value);
     }
@@ -586,12 +588,12 @@ impl<'a> CPU<'a> {
         let a = self.reg.read(Register::A);
         let b = value ^ 0xFF;
         let c = if self.reg.check_flag(Flag::Carry) {
-            1
+            1u16
         } else {
-            0
+            0u16
         };
 
-        let result = a as u16 + b as u16 + c as u16;
+        let result = u16::from(a) + u16::from(b) + c;
 
         self.reg.update_cv(a, b, result);
         self.reg.write(Register::A, result as u8);
@@ -667,12 +669,12 @@ impl<'a> CPU<'a> {
 
         let a = self.reg.read(Register::A);
         let c = if self.reg.check_flag(Flag::Carry) {
-            1
+            1u16
         } else {
-            0
+            0u16
         };
 
-        let result = a as u16 + x as u16 + c as u16;
+        let result = u16::from(a) + u16::from(x) + c;
 
         self.reg.update_cv(a, x, result);
         self.reg.write(Register::A, result as u8);
@@ -749,8 +751,8 @@ impl<'a> CPU<'a> {
         let lo = (addr & 0xFF) as u8;
 
         let val = self.reg.read(r) & (hi.wrapping_add(1));
-        let ad = ((val as u16) << 8) | lo as u16;
-        self.write(ad, val);
+        let ad = (u16::from(val) << 8) | u16::from(lo);
+        self.write(ad, val); 
     }
     // #endregion
 }

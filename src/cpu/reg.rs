@@ -139,12 +139,12 @@ impl Registers {
 
     pub fn update_cv(&mut self, x: u8, y: u8, r: u16) {
         if r > 0xFF {
-            self.p.insert(ProcessorStatus::CARRY)
+            self.p.insert(ProcessorStatus::CARRY) 
         } else {
             self.p.remove(ProcessorStatus::CARRY)
         }
 
-        if (!(x ^ y) as u16) & (x as u16 ^ r) & 0x80 != 0 {
+        if u16::from(!(x ^ y)) & (u16::from(x) ^ r) & 0x80 != 0 {
             self.p.insert(ProcessorStatus::OVERFLOW)
         } else {
             self.p.remove(ProcessorStatus::OVERFLOW)

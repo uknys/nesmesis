@@ -130,6 +130,6 @@ fn cpu_instruction_test(x: &[u8], s: &str) -> String {
 fn cpu_instructions_test() {
     INSTRUCTIONS_SINGLES
         .iter()
-        .for_each(|&a| assert_eq!(cpu_instruction_test(a.0, a.1), format!("{}  Passed", a.1)))
+        .for_each(|&(a, b)| assert_eq!(cpu_instruction_test(a, b), format!("{}  Passed", b)))
 }
 // #endregion
