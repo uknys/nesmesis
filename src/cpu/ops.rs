@@ -1,4 +1,4 @@
-use cpu::reg::{Register, Flag};
+use cpu::reg::{Flag, Register};
 
 #[derive(Clone, Copy)]
 pub enum AddressingMode {
@@ -77,10 +77,10 @@ pub enum Operation {
 
 impl From<u8> for Operation {
     fn from(op: u8) -> Operation {
-        use self::Operation::*;
         use self::AddressingMode::*;
-        use self::Register::*;
         use self::Flag::*;
+        use self::Operation::*;
+        use self::Register::*;
 
         match op {
             0x00 => Break,
@@ -232,14 +232,14 @@ impl From<u8> for Operation {
             0xF8 => Flag(Decimal, true),
             0xF9 => Sub(AbsoluteY(true)),
             0xFD => Sub(AbsoluteX(true)),
-            0xFE => Inc(None, Some(AbsoluteX(false))), 
+            0xFE => Inc(None, Some(AbsoluteX(false))),
             0x04 | 0x44 | 0x64 => Nop(Some(ZeroPage)),
             0x0C => Nop(Some(Absolute)),
             0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => Nop(Some(ZeroPageX)),
             0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => Nop(Some(Immediate)),
             0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => Nop(Some(AbsoluteX(true))),
-            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA | 0xEA | 0x02 | 0x12 | 0x22 | 0x32 | 0x42 |
-            0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => Nop(None),
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA | 0xEA | 0x02 | 0x12 | 0x22 | 0x32 | 0x42
+            | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => Nop(None),
             0xA7 => Lax(ZeroPage),
             0xB7 => Lax(ZeroPageY),
             0xAF => Lax(Absolute),

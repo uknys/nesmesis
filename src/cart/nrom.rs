@@ -36,12 +36,10 @@ impl Mapper for NROM {
         match a {
             0x6000...0x7FFF => self.prg_ram[a as usize % 0x6000],
             0x8000...0xBFFF => self.prg_rom[a as usize % 0x8000],
-            0xC000...0xFFFF => {
-                match self.prg_num {
-                    2 => self.prg_rom[a as usize % 0x8000],
-                    _ => self.prg_rom[a as usize % 0xC000],
-                }
-            }
+            0xC000...0xFFFF => match self.prg_num {
+                2 => self.prg_rom[a as usize % 0x8000],
+                _ => self.prg_rom[a as usize % 0xC000],
+            },
             _ => 0,
         }
     }
@@ -50,12 +48,10 @@ impl Mapper for NROM {
         match a {
             0x6000...0x7FFF => self.prg_ram[a as usize % 0x6000] = v,
             0x8000...0xBFFF => self.prg_rom[a as usize % 0x8000] = v,
-            0xC000...0xFFFF => {
-                match self.prg_num {
-                    2 => self.prg_rom[a as usize % 0x8000] = v,
-                    _ => self.prg_rom[a as usize % 0xC000] = v,
-                }
-            }
+            0xC000...0xFFFF => match self.prg_num {
+                2 => self.prg_rom[a as usize % 0x8000] = v,
+                _ => self.prg_rom[a as usize % 0xC000] = v,
+            },
             _ => (),
         }
     }

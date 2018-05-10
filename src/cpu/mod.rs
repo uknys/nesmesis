@@ -1,8 +1,8 @@
-pub mod reg;
 pub mod ops;
+pub mod reg;
 
-use cpu::reg::{Flag, Register, Registers};
 use cpu::ops::{AddressingMode, Operation};
+use cpu::reg::{Flag, Register, Registers};
 use MMU;
 
 const NMI_VECTOR: u16 = 0xFFFA;
@@ -36,13 +36,13 @@ impl<'a> CPU<'a> {
         self.reg.write(Register::P, 0x24);
     }
 
-    pub fn execute(&mut self) {
+    pub fn execute(&mut self) -> Result<(), String> {
         let p = self.imm();
         let ins: Operation = self.read(p).into();
-        self.decode(ins);
+        self.decode(ins)
     }
 
-    fn decode(&mut self, ins: Operation) {
+    fn decode(&mut self, ins: Operation) -> Result<(), String> {
         use self::Operation::*;
 
         match ins {
@@ -83,8 +83,10 @@ impl<'a> CPU<'a> {
             Atx(m) => self.atx(m),
             Axs(m) => self.axs(m),
             Sa(r, m) => self.sa(r, m),
-            BadOP(a) => println!("Unknown Instruction: {:02X}", a),
+            BadOP(a) => return Err(format!("Unknown Instruction: {:02X}", a)),
         }
+
+        Ok(())
     }
     // #endregion
 
@@ -402,10 +404,8 @@ impl<'a> CPU<'a> {
 
         self.reg.update_flag(Flag::Carry, reg >= value);
         self.reg.update_flag(Flag::Zero, reg == value);
-        self.reg.update_flag(
-            Flag::Negative,
-            (reg as i16 - value as i16) & 0x80 == 0x80,
-        );
+        self.reg
+            .update_flag(Flag::Negative, (reg as i16 - value as i16) & 0x80 == 0x80);
     }
 
     fn jump(&mut self, m: Option<AddressingMode>) {
@@ -572,10 +572,8 @@ impl<'a> CPU<'a> {
         let reg = self.reg.read(Register::A);
         self.reg.update_flag(Flag::Carry, reg >= value);
         self.reg.update_flag(Flag::Zero, reg == value);
-        self.reg.update_flag(
-            Flag::Negative,
-            (reg as i16 - value as i16) & 0x80 == 0x80,
-        );
+        self.reg
+            .update_flag(Flag::Negative, (reg as i16 - value as i16) & 0x80 == 0x80);
 
         self.write(addr, value);
     }
@@ -633,7 +631,6 @@ impl<'a> CPU<'a> {
         self.reg.write(Register::A, a & result);
         self.write(addr, result);
     }
-
 
     fn sre(&mut self, m: AddressingMode) {
         let addr = self.resolve_addr(m);
@@ -725,10 +722,8 @@ impl<'a> CPU<'a> {
             0
         };
 
-        self.reg.update_flag(
-            Flag::Overflow,
-            x ^ (reg >> 5) & 0x01 != 0,
-        );
+        self.reg
+            .update_flag(Flag::Overflow, x ^ (reg >> 5) & 0x01 != 0);
     }
 
     fn atx(&mut self, m: AddressingMode) {

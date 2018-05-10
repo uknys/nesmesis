@@ -156,5 +156,5 @@ impl Registers {
 impl Default for Registers {
     fn default() -> Self {
         Self::new()
-     }
+    }
 }

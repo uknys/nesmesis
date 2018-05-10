@@ -3,8 +3,8 @@
 #[macro_use]
 extern crate bitflags;
 
-pub mod cpu;
 pub mod cart;
+pub mod cpu;
 
 pub trait MMU {
     fn read(&self, a: u16) -> u8;
