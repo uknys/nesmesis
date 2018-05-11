@@ -72,7 +72,7 @@ pub enum Operation {
     Sa(Register, AddressingMode),
 
     // Unknown Opcode
-    BadOP(u8),
+    Kill,
 }
 
 impl From<u8> for Operation {
@@ -299,7 +299,7 @@ impl From<u8> for Operation {
             0xCB => Axs(Immediate),
             0x9C => Sa(Y, AbsoluteX(false)),
             0x9E => Sa(X, AbsoluteY(false)),
-            _ => BadOP(op),
+            _ => Kill,
         }
     }
 }

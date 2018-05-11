@@ -39,54 +39,56 @@ impl<'a> CPU<'a> {
     pub fn execute(&mut self) -> Result<(), String> {
         let p = self.imm();
         let ins: Operation = self.read(p).into();
-        self.decode(ins)
-    }
-
-    fn decode(&mut self, ins: Operation) -> Result<(), String> {
         use self::Operation::*;
 
         match ins {
-            Load(r, m) => self.load(r, m),
-            Store(r, m) => self.store(r, m),
-            Transfer(r1, r2) => self.transfer(r1, r2),
-            Add(m) => self.add(m),
-            Inc(r, m) => self.inc(r, m),
-            Dec(r, m) => self.dec(r, m),
-            Sub(m) => self.sub(m),
-            And(m) => self.and(m),
-            Asl(m) => self.asl(m),
-            Bits(m) => self.bits(m),
-            Xor(m) => self.xor(m),
-            Lsr(m) => self.lsr(m),
-            Or(m) => self.or(m),
-            Rol(m) => self.rol(m),
-            Ror(m) => self.ror(m),
-            Branch(f, b) => self.branch(f, b),
-            Jump(m) => self.jump(m),
-            Ret(b) => self.ret(b),
-            Flag(f, b) => self.flag(f, b),
-            Compare(r, m) => self.compare(r, m),
-            Stack(r, b) => self.stack(r, b),
-            Break => self.brk(),
-            Nop(m) => self.nop(m),
-            Lax(m) => self.lax(m),
-            Sax(m) => self.sax(m),
-            Dcp(m) => self.dcp(m),
-            Isb(m) => self.isb(m),
-            Slo(m) => self.slo(m),
-            Rla(m) => self.rla(m),
-            Sre(m) => self.sre(m),
-            Rra(m) => self.rra(m),
-            Aac(m) => self.aac(m),
-            Asr(m) => self.asr(m),
-            Arr(m) => self.arr(m),
-            Atx(m) => self.atx(m),
-            Axs(m) => self.axs(m),
-            Sa(r, m) => self.sa(r, m),
-            BadOP(a) => return Err(format!("Unknown Instruction: {:02X}", a)),
+            Load(r, m) => Ok(self.load(r, m)),
+            Store(r, m) => Ok(self.store(r, m)),
+            Transfer(r1, r2) => Ok(self.transfer(r1, r2)),
+            Add(m) => Ok(self.add(m)),
+            Inc(Some(r), _) => Ok(self.inc_r(r)),
+            Inc(_, Some(m)) => Ok(self.inc_m(m)),
+            Dec(Some(r), _) => Ok(self.dec_r(r)),
+            Dec(_, Some(m)) => Ok(self.dec_m(m)),
+            Sub(m) => Ok(self.sub(m)),
+            And(m) => Ok(self.and(m)),
+            Asl(None) => Ok(self.asl_a()),
+            Asl(Some(m)) => Ok(self.asl(m)),
+            Bits(m) => Ok(self.bits(m)),
+            Xor(m) => Ok(self.xor(m)),
+            Lsr(None) => Ok(self.lsr_a()),
+            Lsr(Some(m)) => Ok(self.lsr(m)),
+            Or(m) => Ok(self.or(m)),
+            Rol(None) => Ok(self.rol_a()),
+            Rol(Some(m)) => Ok(self.rol(m)),
+            Ror(None) => Ok(self.ror_a()),
+            Ror(Some(m)) => Ok(self.ror(m)),
+            Branch(f, b) => Ok(self.branch(f, b)),
+            Jump(None) => Ok(self.jsr()),
+            Jump(Some(m)) => Ok(self.jump(m)),
+            Ret(true) => Ok(self.rts()),
+            Ret(false) => Ok(self.rti()),
+            Flag(f, b) => Ok(self.flag(f, b)),
+            Compare(r, m) => Ok(self.compare(r, m)),
+            Stack(r, b) => Ok(self.stack(r, b)),
+            Break => Ok(self.brk()),
+            Nop(m) => Ok(self.nop(m)),
+            Lax(m) => Ok(self.lax(m)),
+            Sax(m) => Ok(self.sax(m)),
+            Dcp(m) => Ok(self.dcp(m)),
+            Isb(m) => Ok(self.isb(m)),
+            Slo(m) => Ok(self.slo(m)),
+            Rla(m) => Ok(self.rla(m)),
+            Sre(m) => Ok(self.sre(m)),
+            Rra(m) => Ok(self.rra(m)),
+            Aac(m) => Ok(self.aac(m)),
+            Asr(m) => Ok(self.asr(m)),
+            Arr(m) => Ok(self.arr(m)),
+            Atx(m) => Ok(self.atx(m)),
+            Axs(m) => Ok(self.axs(m)),
+            Sa(r, m) => Ok(self.sa(r, m)),
+            _ => Err(format!("Bad Instruction {:02X}", p)),
         }
-
-        Ok(())
     }
     // #endregion
 
@@ -171,21 +173,19 @@ impl<'a> CPU<'a> {
     fn zpi(&mut self, r: Register) -> u16 {
         let a = self.zp();
         self.bus.cycle();
-        let reg = self.reg.read(r);
-        (a + u16::from(reg)) & 0xFF
+        (a + u16::from(self.reg.read(r))) & 0xFF
     }
 
     fn izx(&mut self) -> u16 {
         let imm = self.imm();
-        let x = self.reg.read(Register::X);
-        let zero = self.read(imm).wrapping_add(x);
+        let res = self.read(imm).wrapping_add(self.reg.read(Register::X));
 
         self.bus.cycle();
 
-        if zero == 0xFF {
+        if res == 0xFF {
             u16::from(self.read(0xFF)) | (u16::from(self.read(0x00)) << 8)
         } else {
-            self.read16(u16::from(zero))
+            self.read16(u16::from(res))
         }
     }
 
@@ -272,38 +272,34 @@ impl<'a> CPU<'a> {
         self.reg.write(Register::A, result as u8);
     }
 
-    fn dec(&mut self, r: Option<Register>, m: Option<AddressingMode>) {
-        if let Some(r) = r {
-            let v = self.reg.read(r).wrapping_sub(1);
-            self.reg.write(r, v);
-            self.bus.cycle();
-        }
+    fn dec_m(&mut self, m: AddressingMode) {
+        let addr = self.resolve_addr(m);
+        let value = self.read(addr).wrapping_sub(1);
+        self.bus.cycle();
 
-        if let Some(m) = m {
-            let addr = self.resolve_addr(m);
-            let value = self.read(addr).wrapping_sub(1);
-            self.bus.cycle();
-
-            self.reg.update_zn(value);
-            self.write(addr, value);
-        }
+        self.reg.update_zn(value);
+        self.write(addr, value);
     }
 
-    fn inc(&mut self, r: Option<Register>, m: Option<AddressingMode>) {
-        if let Some(r) = r {
-            let v = self.reg.read(r).wrapping_add(1);
-            self.reg.write(r, v);
-            self.bus.cycle();
-        }
+    fn dec_r(&mut self, r: Register) {
+        let v = self.reg.read(r).wrapping_sub(1);
+        self.reg.write(r, v);
+        self.bus.cycle();
+    }
 
-        if let Some(m) = m {
-            let addr = self.resolve_addr(m);
-            let value = self.read(addr).wrapping_add(1);
-            self.bus.cycle();
+    fn inc_m(&mut self, m: AddressingMode) {
+        let addr = self.resolve_addr(m);
+        let value = self.read(addr).wrapping_add(1);
+        self.bus.cycle();
 
-            self.reg.update_zn(value);
-            self.write(addr, value);
-        }
+        self.reg.update_zn(value);
+        self.write(addr, value);
+    }
+
+    fn inc_r(&mut self, r: Register) {
+        let v = self.reg.read(r).wrapping_add(1);
+        self.reg.write(r, v);
+        self.bus.cycle();
     }
 
     fn sub(&mut self, m: AddressingMode) {
@@ -330,23 +326,23 @@ impl<'a> CPU<'a> {
         self.reg.write(Register::A, a & value);
     }
 
-    fn asl(&mut self, r: Option<AddressingMode>) {
-        if let Some(r) = r {
-            let addr = self.resolve_addr(r);
-            let value = self.read(addr);
+    fn asl_a(&mut self) {
+        let value = self.reg.read(Register::A);
 
-            self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
-            self.bus.cycle();
+        self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
+        self.reg.write(Register::A, value << 1);
+        self.bus.cycle();
+    }
 
-            self.reg.update_zn(value << 1);
-            self.write(addr, value << 1);
-        } else {
-            let value = self.reg.read(Register::A);
+    fn asl(&mut self, r: AddressingMode) {
+        let addr = self.resolve_addr(r);
+        let value = self.read(addr);
 
-            self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
-            self.reg.write(Register::A, value << 1);
-            self.bus.cycle();
-        }
+        self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
+        self.bus.cycle();
+
+        self.reg.update_zn(value << 1);
+        self.write(addr, value << 1);
     }
 
     fn bits(&mut self, m: AddressingMode) {
@@ -366,23 +362,23 @@ impl<'a> CPU<'a> {
         self.reg.write(Register::A, a ^ value);
     }
 
-    fn lsr(&mut self, r: Option<AddressingMode>) {
-        if let Some(r) = r {
-            let addr = self.resolve_addr(r);
-            let value = self.read(addr);
+    fn lsr_a(&mut self) {
+        let value = self.reg.read(Register::A);
 
-            self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
-            self.bus.cycle();
+        self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
+        self.reg.write(Register::A, value >> 1);
+        self.bus.cycle();
+    }
 
-            self.reg.update_zn(value >> 1);
-            self.write(addr, value >> 1);
-        } else {
-            let value = self.reg.read(Register::A);
+    fn lsr(&mut self, r: AddressingMode) {
+        let addr = self.resolve_addr(r);
+        let value = self.read(addr);
 
-            self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
-            self.reg.write(Register::A, value >> 1);
-            self.bus.cycle();
-        }
+        self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
+        self.bus.cycle();
+
+        self.reg.update_zn(value >> 1);
+        self.write(addr, value >> 1);
     }
 
     fn or(&mut self, m: AddressingMode) {
@@ -410,18 +406,18 @@ impl<'a> CPU<'a> {
         );
     }
 
-    fn jump(&mut self, m: Option<AddressingMode>) {
-        if let Some(m) = m {
-            let addr = self.resolve_addr(m);
-            self.reg.write_pc(addr);
-        } else {
-            let t = self.reg.read_pc().wrapping_add(1);
-            self.bus.cycle();
-            self.push16(t);
-            let addr = self.imm16();
-            let value = self.read16(addr);
-            self.reg.write_pc(value);
-        }
+    fn jsr(&mut self) {
+        let t = self.reg.read_pc().wrapping_add(1);
+        self.bus.cycle();
+        self.push16(t);
+        let addr = self.imm16();
+        let value = self.read16(addr);
+        self.reg.write_pc(value);
+    }
+
+    fn jump(&mut self, m: AddressingMode) {
+        let addr = self.resolve_addr(m);
+        self.reg.write_pc(addr);
     }
 
     fn stack(&mut self, r: Register, push: bool) {
@@ -442,18 +438,18 @@ impl<'a> CPU<'a> {
         }
     }
 
-    fn ret(&mut self, sub: bool) {
-        if sub {
-            self.bus.cycle();
-            self.bus.cycle();
-            let addr = self.pop16().wrapping_add(1);
-            self.reg.write_pc(addr);
-            self.bus.cycle();
-        } else {
-            self.stack(Register::P, false);
-            let addr = self.pop16();
-            self.reg.write_pc(addr);
-        }
+    fn rti(&mut self) {
+        self.stack(Register::P, false);
+        let addr = self.pop16();
+        self.reg.write_pc(addr);
+    }
+
+    fn rts(&mut self) {
+        self.bus.cycle();
+        self.bus.cycle();
+        let addr = self.pop16().wrapping_add(1);
+        self.reg.write_pc(addr);
+        self.bus.cycle();
     }
 
     fn brk(&mut self) {
@@ -499,52 +495,64 @@ impl<'a> CPU<'a> {
         self.bus.cycle();
     }
 
-    fn rol(&mut self, m: Option<AddressingMode>) {
+    fn rol_a(&mut self) {
         let c = if self.reg.check_flag(Flag::Carry) {
             1
         } else {
             0
         };
 
-        if let Some(m) = m {
-            let addr = self.resolve_addr(m);
-            let value = self.read(addr);
-
-            self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
-            self.bus.cycle();
-
-            self.reg.update_zn((value << 1) | c);
-            self.write(addr, (value << 1) | c);
-        } else {
-            let value = self.reg.read(Register::A);
-            self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
-            self.reg.write(Register::A, (value << 1) | c);
-            self.bus.cycle();
-        }
+        let value = self.reg.read(Register::A);
+        self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
+        self.reg.write(Register::A, (value << 1) | c);
+        self.bus.cycle();
     }
 
-    fn ror(&mut self, m: Option<AddressingMode>) {
+    fn rol(&mut self, m: AddressingMode) {
+        let c = if self.reg.check_flag(Flag::Carry) {
+            1
+        } else {
+            0
+        };
+
+        let addr = self.resolve_addr(m);
+        let value = self.read(addr);
+
+        self.reg.update_flag(Flag::Carry, value & 0x80 == 0x80);
+        self.bus.cycle();
+
+        self.reg.update_zn((value << 1) | c);
+        self.write(addr, (value << 1) | c);
+    }
+
+    fn ror_a(&mut self) {
         let c = if self.reg.check_flag(Flag::Carry) {
             0x80
         } else {
             0
         };
 
-        if let Some(m) = m {
-            let addr = self.resolve_addr(m);
-            let value = self.read(addr);
+        let value = self.reg.read(Register::A);
+        self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
+        self.reg.write(Register::A, c | (value >> 1));
+        self.bus.cycle();
+    }
 
-            self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
-            self.bus.cycle();
-
-            self.reg.update_zn(c | (value >> 1));
-            self.write(addr, c | (value >> 1));
+    fn ror(&mut self, m: AddressingMode) {
+        let c = if self.reg.check_flag(Flag::Carry) {
+            0x80
         } else {
-            let value = self.reg.read(Register::A);
-            self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
-            self.reg.write(Register::A, c | (value >> 1));
-            self.bus.cycle();
-        }
+            0
+        };
+
+        let addr = self.resolve_addr(m);
+        let value = self.read(addr);
+
+        self.reg.update_flag(Flag::Carry, value & 0x01 == 0x01);
+        self.bus.cycle();
+
+        self.reg.update_zn(c | (value >> 1));
+        self.write(addr, c | (value >> 1));
     }
     // #endregion
 
@@ -574,8 +582,10 @@ impl<'a> CPU<'a> {
         let reg = self.reg.read(Register::A);
         self.reg.update_flag(Flag::Carry, reg >= value);
         self.reg.update_flag(Flag::Zero, reg == value);
-        self.reg
-            .update_flag(Flag::Negative, (i16::from(reg) - i16::from(value)) & 0x80 == 0x80);
+        self.reg.update_flag(
+            Flag::Negative,
+            (i16::from(reg) - i16::from(value)) & 0x80 == 0x80,
+        );
 
         self.write(addr, value);
     }
@@ -752,7 +762,7 @@ impl<'a> CPU<'a> {
 
         let val = self.reg.read(r) & (hi.wrapping_add(1));
         let ad = (u16::from(val) << 8) | u16::from(lo);
-        self.write(ad, val); 
+        self.write(ad, val);
     }
     // #endregion
 }
